@@ -1,11 +1,12 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "care-radi0",
-  "main": "./src/worker.js",
+  "main": "./worker.js",
   "compatibility_date": "2026-09-01",
   "keep_vars": true,
+
   "assets": {
-    "directory": "./public",
+    "directory": "./",
     "binding": "ASSETS",
     "run_worker_first": [
       "/itunes/*",
@@ -14,6 +15,7 @@
       "/admin/*"
     ]
   },
+
   "d1_databases": [
     {
       "binding": "DB"

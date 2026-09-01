@@ -1,0 +1,8 @@
+worker.js
+wrangler.jsonc
+package.json
+package-lock.json
+README.md
+.gitignore
+.assetsignore
+node_modules

@@ -17,9 +17,10 @@
   },
 
   "d1_databases": [
-  {
-    "binding": "DB",
-    "database_name": "care-radi0-submissions",
-    "database_id": "6b613a8b-5a9e-4855-a4b1-c9482ba0a150"
-  }
-]
+    {
+      "binding": "DB",
+      "database_name": "care-radi0-submissions",
+      "database_id": "6b613a8b-5a9e-4855-a4b1-c9482ba0a150"
+    }
+  ]
+}

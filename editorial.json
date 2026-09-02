@@ -1,0 +1,33 @@
+{
+  "programme": [
+    {
+        "date": "02.09.26",
+        "time": "@ 00:00",
+        "title": "guest mix — 001 layl.mp3",
+        "note": "2h of bass music"
+    },
+    {
+        "date": "02.09.26",
+        "time": "@ 00:00",
+        "title": "guest mix — 001 layl.mp3",
+        "note": "2h of bass music"
+    },
+    {
+        "date": "02.09.26",
+        "time": "@ 00:00",
+        "title": "guest mix — 001 layl.mp3",
+        "note": "2h of bass music"
+    }
+  ],
+  "notes": [
+    {
+      "date": "01.09.26",
+      "text": "added a few tracks, all of them sound better at night."
+    },
+    {
+      "date": "31.08.26",
+      "text": "slow radio 4 a fast internetttt apparently we meant it."
+    }
+  ],
+  "track_notes": {}
+}

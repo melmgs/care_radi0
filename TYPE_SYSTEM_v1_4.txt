@@ -1,0 +1,14 @@
+care_radi0 v1.4 — strict four-size typography
+
+Public site uses exactly four visual sizes:
+- grand: logo + full-screen overlay titles
+- medium: editorial headings, track title, program names
+- small: body, descriptions, nav, secondary info
+- micro: dates, metadata, technical labels
+
+Featured programs no longer get a separate giant size. They use medium with heavier weight.
+
+Fonts:
+- Instrument Sans — main/editorial/UI
+- IBM Plex Mono — technical metadata/details
+Arial and generic monospace are fallbacks only.

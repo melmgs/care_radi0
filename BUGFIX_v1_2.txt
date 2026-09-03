@@ -1,0 +1,16 @@
+care_radi0 PROGRAMS v1.2
+
+Fixed the interaction regression that prevented Submit / Programs / Heard / Recently overlays from appearing in the viewport.
+
+Root cause:
+A late CSS rule accidentally applied `position: relative` to `.overlay` and `.mobile-command-screen`, overriding their earlier `position: fixed` declarations. The JavaScript clicks were firing, but the opened content was positioned lower in the document instead of on screen.
+
+Fixes:
+- overlays forced back to fixed/full viewport
+- mobile command screen forced back to fixed/full viewport
+- mobile mini player and landscape player protected from the same cascade regression
+- static files use relative paths so VS Code / Live Server previews work even when the repo is opened inside a parent workspace
+- editorial.json and programs.json frontend fetches use relative paths
+- cache-busting version bumped for style.css and script.js
+
+No FastCast, artwork, submit API, D1 or program data logic was changed.

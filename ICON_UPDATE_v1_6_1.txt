@@ -1,0 +1,7 @@
+care_radi0 v1.6.1
+Updated favicon, PWA icons, Apple touch icon and OG image to use the Beast display lettering.
+No layout, JavaScript, FastCast, Programs, submit or backend logic was changed.
+
+IMPORTANT:
+Keep your own Beast-Regular.woff2 at the repo root for the website typography.
+The font file is not included in this package.

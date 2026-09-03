@@ -221,16 +221,16 @@ function adminPage(rows){
 <meta name="robots" content="noindex,nofollow">
 <title>care_radi0 submissions</title>
 <style>
-  :root{--blue:#071cff;--red:#ff2817}
+  :root{--blue:#F2EEE6;--red:#F04D9B;--ink:#171614}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--blue);color:white;font-family:Arial,sans-serif;padding:24px}
+  body{margin:0;background:var(--blue);color:var(--ink);font-family:Arial,sans-serif;padding:24px}
   header{display:flex;gap:20px;align-items:baseline;justify-content:space-between;position:sticky;top:0;background:var(--blue);padding:6px 0 20px}
   h1{margin:0;color:var(--red);font-size:clamp(42px,9vw,110px);font-weight:400;letter-spacing:-.06em;line-height:.8}
-  header a{color:white;font-size:12px}
+  header a{color:var(--ink);font-size:12px}
   main{max-width:980px;margin-top:46px}
-  article{padding:20px 0 28px;border-top:1px solid rgba(255,255,255,.35)}
+  article{padding:20px 0 28px;border-top:1px solid rgba(23,22,20,.18)}
   h2{color:var(--red);font-size:28px;font-weight:400;margin:8px 0}
-  a{color:white;overflow-wrap:anywhere}
+  a{color:var(--ink);overflow-wrap:anywhere}
   .date,.muted{opacity:.55;font-size:12px}
   .muted{margin-top:8px}
   .note{margin-top:18px;max-width:720px;white-space:pre-wrap;font-size:17px;line-height:1.25}

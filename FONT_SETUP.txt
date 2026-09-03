@@ -1,0 +1,14 @@
+care_radi0 v1.6 — font setup
+
+The site is now configured for:
+- GRAND tier: Beast Regular
+- MEDIUM / SMALL / MICRO: Arial Narrow / Arial Condensed system stack
+
+IMPORTANT
+Place your own Beast-Regular.woff2 file at the repository root, next to index.html and style.css.
+The font file itself is intentionally not bundled in this package.
+
+Expected path:
+./Beast-Regular.woff2
+
+If Beast is installed locally on the device, the CSS can also pick it up via local().

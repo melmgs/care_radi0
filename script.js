@@ -22,9 +22,9 @@ const notesList=document.getElementById("notesList");
 const heardOverlay=document.getElementById("heardOverlay");
 const heardList=document.getElementById("heardList");
 const submitOverlay=document.getElementById("submitOverlay");
-const rotationOverlay=document.getElementById("rotationOverlay");
+const programsOverlay=document.getElementById("programsOverlay");
 const submitMusic=document.getElementById("submitMusic");
-const rotationTrigger=document.getElementById("rotationTrigger");
+const programsTrigger=document.getElementById("programsTrigger");
 const shareMenu=document.getElementById("shareMenu");
 const shareCurrent=document.getElementById("shareCurrent");
 const shareTrackButton=document.getElementById("shareTrackButton");
@@ -52,7 +52,7 @@ const landscapeTitle=document.getElementById("landscapeTitle");
 const landscapeArtist=document.getElementById("landscapeArtist");
 const landscapePlayButton=document.getElementById("landscapePlayButton");
 
-const rotationTracks=document.getElementById("rotationTracks");
+const programsList=document.getElementById("programsList");
 const terminalTrigger=document.getElementById("terminalTrigger");
 const terminalDock=document.getElementById("terminalDock");
 const terminalLog=document.getElementById("terminalLog");
@@ -61,6 +61,8 @@ const terminalInput=document.getElementById("terminalInput");
 
 const programmeList=document.getElementById("programmeList");
 const programmeSection=document.getElementById("programme");
+const currentProgramStatus=document.getElementById("currentProgramStatus");
+const currentProgramName=document.getElementById("currentProgramName");
 
 let userWantsPlayback=false;
 let reconnectTimer=null;
@@ -94,12 +96,17 @@ let editorialData={
   track_notes:{}
 };
 
+let programsData={
+  default_program:"",
+  programs:[]
+};
+
 
 /* ---------- FUTURE EDITORIAL DATA ---------- */
 
 async function loadEditorialData(){
   try{
-    const response=await fetch("/editorial.json",{cache:"no-store"});
+    const response=await fetch("./editorial.json",{cache:"no-store"});
     if(!response.ok)throw new Error();
 
     const data=await response.json();
@@ -112,14 +119,37 @@ async function loadEditorialData(){
           ?data.track_notes
           :{}
     };
-
-    renderProgramme();
   }catch(error){
-    renderProgramme();
+    editorialData={programme:[],notes:[],track_notes:{}};
   }
+
+  renderProgramme();
+  updateCurrentProgramStatus();
+}
+
+async function loadProgramsData(){
+  try{
+    const response=await fetch("./programs.json",{cache:"no-store"});
+    if(!response.ok)throw new Error();
+
+    const data=await response.json();
+
+    programsData={
+      default_program:String(data.default_program||""),
+      programs:Array.isArray(data.programs)?data.programs:[]
+    };
+  }catch(error){
+    programsData={default_program:"",programs:[]};
+  }
+
+  updateProgramsTrigger();
+  renderPrograms();
+  renderProgramme();
+  updateCurrentProgramStatus();
 }
 
 loadEditorialData();
+loadProgramsData();
 
 
 /* ---------- HELPERS ---------- */
@@ -134,7 +164,221 @@ function escapeHTML(value){
 }
 
 
-/* ---------- PROGRAMME ---------- */
+/* ---------- PROGRAMS + PROGRAMME ---------- */
+
+function activePrograms(){
+  return programsData.programs.filter(program=>program&&program.active!==false);
+}
+
+function getProgramById(id){
+  const key=String(id||"").trim();
+  if(!key)return null;
+  return programsData.programs.find(program=>String(program?.id||"")===key)||null;
+}
+
+function getDefaultProgram(){
+  return (
+    getProgramById(programsData.default_program) ||
+    activePrograms().find(program=>program.featured) ||
+    activePrograms()[0] ||
+    null
+  );
+}
+
+
+function parseProgrammeDate(value){
+  const clean=String(value||"").trim();
+  let match=clean.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2}|\d{4})$/);
+  if(match){
+    let year=Number(match[3]);
+    if(year<100)year+=2000;
+    return{year,month:Number(match[2]),day:Number(match[1])};
+  }
+
+  match=clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if(match){
+    return{year:Number(match[1]),month:Number(match[2]),day:Number(match[3])};
+  }
+
+  return null;
+}
+
+function parseProgrammeTime(value){
+  const match=String(value||"").match(/(\d{1,2}):(\d{2})/);
+  if(!match)return null;
+  const hour=Number(match[1]);
+  const minute=Number(match[2]);
+  if(hour>23||minute>59)return null;
+  return{hour,minute};
+}
+
+function programmeStamp(dateValue,timeValue){
+  const date=parseProgrammeDate(dateValue);
+  const time=parseProgrammeTime(timeValue);
+  if(!date||!time)return null;
+  return Date.UTC(date.year,date.month-1,date.day,time.hour,time.minute,0,0);
+}
+
+function parisNowStamp(){
+  try{
+    const parts=new Intl.DateTimeFormat("en-GB",{
+      timeZone:"Europe/Paris",
+      year:"numeric",
+      month:"2-digit",
+      day:"2-digit",
+      hour:"2-digit",
+      minute:"2-digit",
+      hourCycle:"h23"
+    }).formatToParts(new Date());
+
+    const pick=type=>Number(parts.find(part=>part.type===type)?.value||0);
+    return Date.UTC(
+      pick("year"),
+      pick("month")-1,
+      pick("day"),
+      pick("hour"),
+      pick("minute"),
+      0,
+      0
+    );
+  }catch(error){
+    const now=new Date();
+    return Date.UTC(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes(),
+      0,
+      0
+    );
+  }
+}
+
+function scheduledProgramSlots(){
+  const rows=Array.isArray(editorialData.programme)?editorialData.programme:[];
+
+  const slots=rows
+    .map(item=>{
+      const program=getProgramById(item?.program);
+      const start=programmeStamp(item?.date,item?.time);
+      return program&&start!==null?{item,program,start}:null;
+    })
+    .filter(Boolean)
+    .sort((a,b)=>a.start-b.start);
+
+  return slots.map((slot,index)=>{
+    const {item,start}=slot;
+    let end=null;
+
+    if(item.end_time){
+      end=programmeStamp(item.date,item.end_time);
+      if(end!==null&&end<=start)end+=24*60*60*1000;
+    }
+
+    if(end===null&&Number(item.duration_minutes)>0){
+      end=start+(Number(item.duration_minutes)*60*1000);
+    }
+
+    if(end===null){
+      const next=slots[index+1];
+      const sixHours=6*60*60*1000;
+      end=next&&next.start>start&&next.start-start<=sixHours
+        ?next.start
+        :start+(60*60*1000);
+    }
+
+    return{...slot,end};
+  });
+}
+
+function getCurrentProgram(){
+  const fallback=getDefaultProgram();
+  const now=parisNowStamp();
+  const current=scheduledProgramSlots()
+    .filter(slot=>now>=slot.start&&now<slot.end)
+    .pop();
+
+  return current?.program||fallback||null;
+}
+
+function currentProgramLabel(program){
+  if(!program)return"";
+  if(program.now_label)return String(program.now_label);
+  return `${program.title||program.id||"program"}${program.featured?" rotation":""}`;
+}
+
+function updateCurrentProgramStatus(){
+  if(!currentProgramStatus||!currentProgramName)return;
+  const program=getCurrentProgram();
+  if(!program){
+    currentProgramStatus.hidden=true;
+    return;
+  }
+
+  currentProgramName.textContent=currentProgramLabel(program);
+  currentProgramStatus.hidden=false;
+}
+
+setInterval(updateCurrentProgramStatus,30*1000);
+
+function updateProgramsTrigger(){
+  if(!programsTrigger)return;
+
+  const featured=getDefaultProgram();
+  programsTrigger.textContent=featured?.title
+    ?`programs — ${featured.title}`
+    :"programs";
+}
+
+function programTrackMarkup(track,index){
+  const artist=escapeHTML(track?.artist||"");
+  const title=escapeHTML(track?.title||"");
+  const url=String(track?.url||"").trim();
+  const content=`
+    <span class="program-track-number">${String(index+1).padStart(2,"0")}</span>
+    <span class="program-track-copy">
+      <span class="program-track-title">${title}</span>
+      ${artist?`<span class="program-track-artist"> — ${artist}</span>`:""}
+    </span>
+  `;
+
+  return url
+    ?`<a class="program-track" href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+    :`<div class="program-track">${content}</div>`;
+}
+
+function renderPrograms(){
+  if(!programsList)return;
+
+  const programs=activePrograms();
+
+  if(!programs.length){
+    programsList.innerHTML='<div class="page-empty">no programs yet</div>';
+    return;
+  }
+
+  programsList.innerHTML=programs.map((program,index)=>{
+    const tracks=Array.isArray(program.tracks)?program.tracks:[];
+    const meta=[
+      program.featured?"main rotation":"",
+      program.update_label||"",
+      program.last_updated?`last updated ${program.last_updated}`:""
+    ].filter(Boolean).join(" · ");
+
+    return `
+      <article class="program-entry${program.featured?" is-featured":""}">
+        <div class="program-index">${String(index+1).padStart(2,"0")}</div>
+        <div class="program-body">
+          <h3 class="program-name">${escapeHTML(program.title||program.id||"")}</h3>
+          ${program.description?`<p class="program-description">${escapeHTML(program.description)}</p>`:""}
+          ${meta?`<div class="program-meta">${escapeHTML(meta)}</div>`:""}
+          ${tracks.length?`<div class="program-tracks">${tracks.map(programTrackMarkup).join("")}</div>`:""}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
 
 function renderProgramme(){
   if(!programmeList)return;
@@ -144,34 +388,46 @@ function renderProgramme(){
     :[];
 
   if(!items.length){
-    programmeList.innerHTML=`
-      <div class="programme-empty">
-        <span>nothing scheduled rn</span>
-        <span>radio keeps playing all day</span>
-      </div>
-    `;
+    const fallback=getDefaultProgram();
+
+    programmeList.innerHTML=fallback
+      ?`
+        <div class="programme-empty programme-default">
+          <span>otherwise</span>
+          <span>${escapeHTML(fallback.title||"")}${fallback.update_label?` · ${escapeHTML(fallback.update_label)}`:""}</span>
+        </div>
+      `
+      :`
+        <div class="programme-empty">
+          <span>nothing scheduled rn</span>
+          <span>radio keeps playing all day</span>
+        </div>
+      `;
     return;
   }
 
   programmeList.innerHTML=items
-    .map(item=>`
-      <article class="programme-row">
-        <time class="programme-date">${escapeHTML(item.date||"")}</time>
+    .map(item=>{
+      const linkedProgram=item.program?getProgramById(item.program):null;
+      const title=linkedProgram?.title||item.title||"";
+      const programMeta=linkedProgram?.update_label||"";
+      const note=item.note||programMeta;
 
-        <div class="programme-time">
-          ${escapeHTML(item.time||"")}
-        </div>
+      return `
+        <article class="programme-row"${linkedProgram?` data-program-id="${escapeHTML(linkedProgram.id)}"`:""}>
+          <time class="programme-date">${escapeHTML(item.date||"")}</time>
 
-        <div class="programme-title">
-          ${escapeHTML(item.title||"")}
-          ${
-            item.note
-              ?`<span class="programme-note">${escapeHTML(item.note)}</span>`
-              :""
-          }
-        </div>
-      </article>
-    `)
+          <div class="programme-time">
+            ${escapeHTML(item.time||"")}
+          </div>
+
+          <div class="programme-title">
+            ${escapeHTML(title)}
+            ${note?`<span class="programme-note">${escapeHTML(note)}</span>`:""}
+          </div>
+        </article>
+      `;
+    })
     .join("");
 }
 
@@ -917,7 +1173,6 @@ async function updateRecent(){
     recentTracksCache=tracks.slice(0,3);
     renderRecentTracks();
     renderHistory();
-    renderRotationTracks();
 
   }catch(error){
     /* Keep the last successful list instead of flashing an error. */
@@ -1000,7 +1255,7 @@ function closeOverlay(overlay){
     notesOverlay,
     heardOverlay,
     submitOverlay,
-    rotationOverlay,
+    programsOverlay,
     listeningOverlay
   ].some(item=>item&&!item.hidden);
 
@@ -1019,7 +1274,7 @@ document.querySelectorAll("[data-close-overlay]").forEach(button=>{
   });
 });
 
-[historyOverlay,notesOverlay,heardOverlay,submitOverlay,rotationOverlay,listeningOverlay].forEach(overlay=>{
+[historyOverlay,notesOverlay,heardOverlay,submitOverlay,programsOverlay,listeningOverlay].forEach(overlay=>{
   if(!overlay)return;
 
   overlay.addEventListener("click",event=>{
@@ -1031,7 +1286,7 @@ document.querySelectorAll("[data-close-overlay]").forEach(button=>{
 
 document.addEventListener("keydown",event=>{
   if(event.key==="Escape"){
-    [historyOverlay,notesOverlay,heardOverlay,submitOverlay,rotationOverlay,listeningOverlay].forEach(overlay=>{
+    [historyOverlay,notesOverlay,heardOverlay,submitOverlay,programsOverlay,listeningOverlay].forEach(overlay=>{
       if(overlay&&!overlay.hidden){
         closeOverlay(overlay);
       }
@@ -1112,7 +1367,7 @@ function enableSwipeToClose(overlay){
   notesOverlay,
   heardOverlay,
   submitOverlay,
-  rotationOverlay,
+  programsOverlay,
   listeningOverlay
 ].forEach(enableSwipeToClose);
 
@@ -1138,37 +1393,6 @@ function renderHistory(){
 function openHistory(){
   renderHistory();
   openOverlay(historyOverlay,recentShell);
-}
-
-function renderRotationTracks(){
-  if(!rotationTracks||!historyTracksCache.length)return;
-
-  const unique=[];
-  const seen=new Set();
-
-  for(const track of historyTracksCache){
-    const key=
-      `${normalizeText(track.artist)}::${normalizeText(track.title)}`;
-
-    if(!key||seen.has(key))continue;
-
-    seen.add(key);
-    unique.push(track);
-
-    if(unique.length>=8)break;
-  }
-
-  rotationTracks.innerHTML=unique
-    .map((track,index)=>`
-      <div class="rotation-track">
-        <span class="rotation-track-number">${String(index+1).padStart(2,"0")}</span>
-        <span>
-          <span class="rotation-track-title">${escapeHTML(track.title)}</span>
-          <span class="rotation-track-artist"> — ${escapeHTML(track.artist)}</span>
-        </span>
-      </div>
-    `)
-    .join("");
 }
 
 recentShell.addEventListener("click",openHistory);
@@ -1232,10 +1456,11 @@ musicSubmitForm.addEventListener("submit",async event=>{
 });
 
 
-/* ---------- ROTATION ARCHIVE ---------- */
+/* ---------- PROGRAMS ---------- */
 
-rotationTrigger.addEventListener("click",()=>{
-  openOverlay(rotationOverlay,rotationTrigger);
+programsTrigger?.addEventListener("click",()=>{
+  renderPrograms();
+  openOverlay(programsOverlay,programsTrigger);
 });
 
 
@@ -1410,20 +1635,9 @@ playerObserver.observe(document.querySelector(".player-wrap"));
 window.addEventListener("resize",updateMiniPlayerVisibility);
 
 
-/* ---------- LOGO COLOR TOGGLE ---------- */
+/* ---------- LOGO ---------- */
 
-function activateLogo(){
-  careLogo.classList.toggle("logo-white");
-}
-
-careLogo.addEventListener("click",activateLogo);
-
-careLogo.addEventListener("keydown",event=>{
-  if(event.key==="Enter"||event.key===" "){
-    event.preventDefault();
-    activateLogo();
-  }
-});
+/* The logo is intentionally static. Its color is defined in CSS. */
 
 
 /* ---------- LISTENING TIME MICROCOPY ---------- */
@@ -1662,7 +1876,7 @@ const TERMINAL_ITEMS=[
   ["listen","listen"],
   ["agenda","agenda"],
   ["submit","submit"],
-  ["rotation","rotation"],
+  ["programs","programs"],
   ["notes","notes"],
   ["heard","heard"]
 ];
@@ -1704,7 +1918,7 @@ function runNavigationCommand(command,trigger){
     return true;
   }
 
-  if(["programme","program","agenda"].includes(clean)){
+  if(["programme","agenda"].includes(clean)){
     programmeSection?.scrollIntoView({
       behavior:"smooth",
       block:"start"
@@ -1719,9 +1933,9 @@ function runNavigationCommand(command,trigger){
     return true;
   }
 
-  if(["rotation","rotations"].includes(clean)){
-    renderRotationTracks();
-    openOverlay(rotationOverlay,trigger);
+  if(["programs","program","rotation","rotations"].includes(clean)){
+    renderPrograms();
+    openOverlay(programsOverlay,trigger);
     return true;
   }
 
@@ -1836,14 +2050,15 @@ function runTerminalCommand(rawCommand){
 }
 
 terminalLog.addEventListener("click",event=>{
-  const button=
-    event.target.closest("[data-terminal-command]");
-
+  const button=event.target.closest("[data-terminal-command]");
   if(!button)return;
 
-  runTerminalCommand(
-    button.dataset.terminalCommand
-  );
+  event.preventDefault();
+  const command=button.dataset.terminalCommand;
+
+  if(runNavigationCommand(command,terminalTrigger)){
+    terminalClose();
+  }
 });
 
 terminalTrigger.addEventListener("click",()=>{
@@ -1887,23 +2102,25 @@ document.addEventListener("pointerdown",event=>{
 ------------------------------------------------------------ */
 
 function ensureMobileCommandUI(){
-  if(document.getElementById("mobileCommandScreen"))return;
+  const existingScreen=document.getElementById("mobileCommandScreen");
+  if(existingScreen)return;
 
   const hero=document.querySelector(".hero");
-
   if(!hero)return;
 
-  const trigger=document.createElement("button");
+  let trigger=document.getElementById("mobileCommandTrigger");
 
-  trigger.id="mobileCommandTrigger";
-  trigger.className="mobile-command-trigger";
-  trigger.type="button";
-  trigger.setAttribute("aria-label","Open care radio menu");
-  trigger.setAttribute("aria-controls","mobileCommandScreen");
-  trigger.setAttribute("aria-expanded","false");
-  trigger.textContent="_";
-
-  hero.appendChild(trigger);
+  if(!trigger){
+    trigger=document.createElement("button");
+    trigger.id="mobileCommandTrigger";
+    trigger.className="mobile-command-trigger";
+    trigger.type="button";
+    trigger.setAttribute("aria-label","Open care radio menu");
+    trigger.setAttribute("aria-controls","mobileCommandScreen");
+    trigger.setAttribute("aria-expanded","false");
+    trigger.textContent="_";
+    hero.appendChild(trigger);
+  }
 
   const screen=document.createElement("section");
 
@@ -1978,18 +2195,11 @@ function ensureMobileCommandUI(){
       event.target.closest("[data-terminal-command]");
 
     if(commandButton){
-      const command=
-        commandButton.dataset.terminalCommand;
+      event.preventDefault();
+      const command=commandButton.dataset.terminalCommand;
 
-      closeMobileCommand({
-        restoreFocus:false
-      });
-
-      runNavigationCommand(
-        command,
-        trigger
-      );
-
+      closeMobileCommand({restoreFocus:false});
+      runNavigationCommand(command,trigger);
       return;
     }
   });

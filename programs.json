@@ -1,0 +1,66 @@
+{
+  "default_program": "new-music",
+  "programs": [
+    {
+      "id": "new-music",
+      "title": "new music",
+      "description": "the songs i’m obsessed with this week",
+      "update_label": "updated every friday",
+      "last_updated": "",
+      "active": true,
+      "featured": true,
+      "tracks": [],
+      "now_label": "new music rotation"
+    },
+    {
+      "id": "ici-ca-chiale",
+      "title": "ici ça chiale (╥﹏╥)",
+      "description": "sad stuff, unfortunately",
+      "update_label": "updated whenever",
+      "last_updated": "",
+      "active": true,
+      "featured": false,
+      "tracks": []
+    },
+    {
+      "id": "slut-pop",
+      "title": "slut pop",
+      "description": "self explanatory",
+      "update_label": "updated whenever",
+      "last_updated": "",
+      "active": true,
+      "featured": false,
+      "tracks": []
+    },
+    {
+      "id": "im-just-a-girl",
+      "title": "IM jUst 💅🏻 A GiRl",
+      "description": "pop music with no dignity",
+      "update_label": "updated whenever",
+      "last_updated": "",
+      "active": true,
+      "featured": false,
+      "tracks": []
+    },
+    {
+      "id": "electronic-duos",
+      "title": "electronic duos",
+      "description": "exactly what it says",
+      "update_label": "updated whenever",
+      "last_updated": "",
+      "active": true,
+      "featured": false,
+      "tracks": []
+    },
+    {
+      "id": "pitchfork-tm",
+      "title": "pitchfork™️",
+      "description": "music for pretending taste is objective",
+      "update_label": "updated whenever",
+      "last_updated": "",
+      "active": true,
+      "featured": false,
+      "tracks": []
+    }
+  ]
+}

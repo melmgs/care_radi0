@@ -4,7 +4,7 @@
     {
       "id": "new-music",
       "title": "new music",
-      "description": "the songs i’m obsessed with this week",
+      "description": "songs i <3 this week",
       "update_label": "updated every friday",
       "last_updated": "",
       "active": true,
@@ -15,7 +15,7 @@
     {
       "id": "ici-ca-chiale",
       "title": "ici ça chiale (╥﹏╥)",
-      "description": "sad stuff, unfortunately",
+      "description": "sad stuff, basically",
       "update_label": "updated whenever",
       "last_updated": "",
       "active": true,
@@ -34,8 +34,8 @@
     },
     {
       "id": "im-just-a-girl",
-      "title": "IM jUst 💅🏻 A GiRl",
-      "description": "pop music with no dignity",
+      "title": "#justgirlythings",
+      "description": "pink pop music",
       "update_label": "updated whenever",
       "last_updated": "",
       "active": true,
@@ -45,7 +45,7 @@
     {
       "id": "electronic-duos",
       "title": "electronic duos",
-      "description": "exactly what it says",
+      "description": "from ear to the femcels",
       "update_label": "updated whenever",
       "last_updated": "",
       "active": true,

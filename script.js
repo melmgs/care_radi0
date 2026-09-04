@@ -820,35 +820,46 @@ if("mediaSession" in navigator){
 }
 
 
-/* ---------- HD ARTWORK ---------- */
+/* ---------- FASTCAST / CENTOVA ARTWORK ONLY ---------- */
 
-function appleScore(result,artist,title){
-  return(
-    fuzzyMatch(result.artistName,artist)+
-    fuzzyMatch(result.trackName,title)*1.35
+const fastCoverSource=document.getElementById("fastCoverSource");
+let lastAcceptedFastCastArtwork="";
+let fastCastArtworkTimer=null;
+
+function normalizeFastCastArtworkURL(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+
+  const url=raw.replace(/^http:\/\//i,"https://");
+
+  /* Do not promote obvious server placeholders as real artwork. */
+  if(/(?:no[-_ ]?cover|no[-_ ]?image|noimage|unknown[-_ ]?cover|default[-_ ]?cover)/i.test(url)){
+    return "";
+  }
+
+  return url;
+}
+
+function readFastCastArtwork(){
+  if(!fastCoverSource)return "";
+
+  return normalizeFastCastArtworkURL(
+    fastCoverSource.getAttribute("src")||fastCoverSource.src||""
   );
 }
 
-function deezerScore(result,artist,title){
-  return(
-    fuzzyMatch(result?.artist?.name,artist)+
-    fuzzyMatch(result?.title,title)*1.35
-  );
-}
+function setArtworkWaitingState(){
+  currentTrack.artwork="";
 
-function appleHD(url){
-  if(!url)return "";
+  [cover,listeningCover,landscapeCover].forEach(image=>{
+    if(!image)return;
+    image.style.opacity="0";
+    image.style.visibility="hidden";
+    image.removeAttribute("src");
+    image.alt="";
+  });
 
-  return String(url)
-    .replace(
-      /\/\d+x\d+bb(?=[\.\-])/i,
-      "/1200x1200bb"
-    )
-    .replace(
-      /\.\d+x\d+(?:-\d+)?(?=\.(?:jpg|jpeg|png|webp)(?:\?|$))/i,
-      ".1200x1200-90"
-    )
-    .replace(/^http:\/\//i,"https://");
+  updateMediaSession();
 }
 
 function showCover(url,sourceName,requestId){
@@ -873,17 +884,23 @@ function showCover(url,sourceName,requestId){
         cover.src=url;
         cover.dataset.artworkSource=sourceName;
         cover.style.display="block";
+        cover.style.visibility="visible";
         cover.alt=`${currentTrack.artist} — ${currentTrack.title}`;
 
         currentTrack.artwork=url;
+        lastAcceptedFastCastArtwork=url;
 
         if(listeningCover){
           listeningCover.src=url;
+          listeningCover.style.visibility="visible";
+          listeningCover.style.opacity="1";
           listeningCover.alt=`${currentTrack.artist} — ${currentTrack.title}`;
         }
 
         if(landscapeCover){
           landscapeCover.src=url;
+          landscapeCover.style.visibility="visible";
+          landscapeCover.style.opacity="1";
           landscapeCover.alt=`${currentTrack.artist} — ${currentTrack.title}`;
         }
 
@@ -902,70 +919,32 @@ function showCover(url,sourceName,requestId){
   });
 }
 
-async function findAppleArtwork(artist,title){
-  const q=encodeURIComponent(`${artist} ${title}`);
+async function applyFastCastArtwork(requestId,allowSameAsPrevious=false){
+  if(requestId!==artworkRequestId)return false;
 
-  const response=await fetch(
-    `/itunes/search?term=${q}&media=music&entity=song&limit=25`,
-    {cache:"no-store"}
-  );
+  const url=readFastCastArtwork();
+  if(!url)return false;
 
-  if(!response.ok){
-    throw new Error("apple search unavailable");
+  /*
+    Centova updates the text metadata and image independently. On a track
+    change, do not instantly reuse the previous track's image. A changed URL
+    is accepted immediately; an unchanged URL is accepted only after the
+    short sync grace period because two tracks can legitimately share an
+    album cover.
+  */
+  if(!allowSameAsPrevious && url===lastAcceptedFastCastArtwork){
+    return false;
   }
 
-  const data=await response.json();
-
-  const ranked=(data.results||[])
-    .filter(item=>item.artworkUrl100)
-    .map(item=>({
-      item,
-      score:appleScore(item,artist,title)
-    }))
-    .sort((a,b)=>b.score-a.score);
-
-  if(!ranked.length||ranked[0].score<6.2){
-    throw new Error("no confident apple match");
+  try{
+    await showCover(url,"fastcast",requestId);
+    return true;
+  }catch(error){
+    return false;
   }
-
-  return appleHD(ranked[0].item.artworkUrl100);
 }
 
-async function findDeezerArtwork(artist,title){
-  const query=encodeURIComponent(
-    `artist:"${artist}" track:"${title}"`
-  );
-
-  const response=await fetch(
-    `/deezer/search?q=${query}&limit=25`,
-    {cache:"no-store"}
-  );
-
-  if(!response.ok){
-    throw new Error("deezer search unavailable");
-  }
-
-  const data=await response.json();
-
-  const ranked=(data.data||[])
-    .filter(item=>item?.album?.cover_xl||item?.album?.cover_big)
-    .map(item=>({
-      item,
-      score:deezerScore(item,artist,title)
-    }))
-    .sort((a,b)=>b.score-a.score);
-
-  if(!ranked.length||ranked[0].score<6.2){
-    throw new Error("no confident deezer match");
-  }
-
-  return(
-    ranked[0].item.album.cover_xl||
-    ranked[0].item.album.cover_big
-  ).replace(/^http:\/\//i,"https://");
-}
-
-async function updateArtwork(artist,title){
+async function updateArtwork(artist,title,album){
   const cleanArtist=String(artist||"").trim();
   const cleanTitle=String(title||"").trim();
 
@@ -981,38 +960,39 @@ async function updateArtwork(artist,title){
   lastArtworkKey=artworkKey;
   const requestId=++artworkRequestId;
 
-  try{
-    const appleUrl=await findAppleArtwork(cleanArtist,cleanTitle);
+  clearTimeout(fastCastArtworkTimer);
+  setArtworkWaitingState();
 
-    if(requestId!==artworkRequestId)return;
+  /* If Centova's image has already switched, use it immediately. */
+  if(await applyFastCastArtwork(requestId,false))return;
 
-    await showCover(appleUrl,"apple",requestId);
-    return;
-  }catch(error){}
-
-  try{
-    const deezerUrl=await findDeezerArtwork(cleanArtist,cleanTitle);
-
-    if(requestId!==artworkRequestId)return;
-
-    await showCover(deezerUrl,"deezer",requestId);
-    return;
-  }catch(error){}
-
-  const fallback=
-    document.getElementById("fastCoverSource")?.src||"";
-
-  if(fallback&&requestId===artworkRequestId){
-    try{
-      await showCover(
-        fallback,
-        "fastcast-fallback",
-        requestId
-      );
-    }catch(error){}
-  }
+  /*
+    Otherwise give the FastCast/Centova streaminfo widget time to update its
+    trackimageurl after artist/title. If the URL stays identical, accept it
+    after the grace period: consecutive songs may share the same artwork.
+  */
+  fastCastArtworkTimer=setTimeout(()=>{
+    applyFastCastArtwork(requestId,true);
+  },1400);
 }
 
+if(fastCoverSource){
+  const fastCoverObserver=new MutationObserver(()=>{
+    clearTimeout(fastCastArtworkTimer);
+    applyFastCastArtwork(artworkRequestId,false).then(applied=>{
+      if(applied)return;
+
+      fastCastArtworkTimer=setTimeout(()=>{
+        applyFastCastArtwork(artworkRequestId,true);
+      },500);
+    });
+  });
+
+  fastCoverObserver.observe(fastCoverSource,{
+    attributes:true,
+    attributeFilter:["src"]
+  });
+}
 
 /* ---------- CURRENT TRACK + TRANSITIONS ---------- */
 
@@ -1081,7 +1061,7 @@ function applyCurrentTrack(artist,title,album){
     });
 
     updateMediaSession();
-    updateArtwork(artist,title);
+    updateArtwork(artist,title,album);
   };
 
   if(firstTrack){
@@ -1279,39 +1259,16 @@ window.addEventListener("resize",()=>{
 });
 
 
-/* ---------- COVER FALLBACK ---------- */
+/* ---------- COVER LOAD FAILURE ---------- */
 
 cover.addEventListener("error",()=>{
-  const fallback=
-    document.getElementById("fastCoverSource")?.src||"";
-
-  if(
-    fallback&&
-    cover.dataset.artworkSource!=="fastcast-fallback"
-  ){
-    cover.dataset.artworkSource="fastcast-fallback";
-    cover.src=fallback;
-    cover.style.display="block";
-    cover.style.opacity="1";
-
-    currentTrack.artwork=fallback;
-
-    if(listeningCover)listeningCover.src=fallback;
-    if(landscapeCover)landscapeCover.src=fallback;
-
-    updateMediaSession();
-    return;
-  }
-
-  const wrap=document.querySelector(".cover-wrap");
-
-  if(wrap){
-    wrap.style.display="none";
-  }
-
-  nowCard.style.gridTemplateColumns="1fr";
+  /* FastCast is the single source of truth. Never substitute a random cover. */
+  currentTrack.artwork="";
+  cover.removeAttribute("src");
+  cover.style.opacity="0";
+  cover.style.visibility="hidden";
+  updateMediaSession();
 });
-
 
 /* ---------- OVERLAYS ---------- */
 

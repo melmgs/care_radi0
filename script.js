@@ -820,32 +820,23 @@ if("mediaSession" in navigator){
 }
 
 
-/* ---------- FASTCAST / CENTOVA ARTWORK ONLY ---------- */
+/* ---------- R2 EMBEDDED ARTWORK ---------- */
 
-const fastCoverSource=document.getElementById("fastCoverSource");
-let lastAcceptedFastCastArtwork="";
-let fastCastArtworkTimer=null;
+const R2_COVER_BASE="https://covers.care-radio.fr";
 
-function normalizeFastCastArtworkURL(value){
-  const raw=String(value||"").trim();
-  if(!raw)return "";
+function coverSlug(value){
+  const normalized=String(value||"")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,"-")
+    .replace(/^-+|-+$/g,"");
 
-  const url=raw.replace(/^http:\/\//i,"https://");
-
-  /* Do not promote obvious server placeholders as real artwork. */
-  if(/(?:no[-_ ]?cover|no[-_ ]?image|noimage|unknown[-_ ]?cover|default[-_ ]?cover)/i.test(url)){
-    return "";
-  }
-
-  return url;
+  return normalized||"unknown";
 }
 
-function readFastCastArtwork(){
-  if(!fastCoverSource)return "";
-
-  return normalizeFastCastArtworkURL(
-    fastCoverSource.getAttribute("src")||fastCoverSource.src||""
-  );
+function r2ArtworkURL(artist,title){
+  return `${R2_COVER_BASE}/${coverSlug(artist)}/${coverSlug(title)}.webp`;
 }
 
 function setArtworkWaitingState(){
@@ -888,7 +879,6 @@ function showCover(url,sourceName,requestId){
         cover.alt=`${currentTrack.artist} — ${currentTrack.title}`;
 
         currentTrack.artwork=url;
-        lastAcceptedFastCastArtwork=url;
 
         if(listeningCover){
           listeningCover.src=url;
@@ -914,44 +904,21 @@ function showCover(url,sourceName,requestId){
       resolve(true);
     };
 
-    image.onerror=()=>reject(new Error("artwork load failed"));
+    image.onerror=()=>reject(new Error("R2 artwork not found"));
     image.src=url;
   });
-}
-
-async function applyFastCastArtwork(requestId,allowSameAsPrevious=false){
-  if(requestId!==artworkRequestId)return false;
-
-  const url=readFastCastArtwork();
-  if(!url)return false;
-
-  /*
-    Centova updates the text metadata and image independently. On a track
-    change, do not instantly reuse the previous track's image. A changed URL
-    is accepted immediately; an unchanged URL is accepted only after the
-    short sync grace period because two tracks can legitimately share an
-    album cover.
-  */
-  if(!allowSameAsPrevious && url===lastAcceptedFastCastArtwork){
-    return false;
-  }
-
-  try{
-    await showCover(url,"fastcast",requestId);
-    return true;
-  }catch(error){
-    return false;
-  }
 }
 
 async function updateArtwork(artist,title,album){
   const cleanArtist=String(artist||"").trim();
   const cleanTitle=String(title||"").trim();
 
-  if(!cleanArtist||!cleanTitle)return;
+  if(!cleanArtist||!cleanTitle){
+    setArtworkWaitingState();
+    return;
+  }
 
-  const artworkKey=
-    `${normalizeText(cleanArtist)}::${normalizeText(cleanTitle)}`;
+  const artworkKey=`${normalizeText(cleanArtist)}::${normalizeText(cleanTitle)}`;
 
   if(artworkKey===lastArtworkKey){
     return;
@@ -960,38 +927,21 @@ async function updateArtwork(artist,title,album){
   lastArtworkKey=artworkKey;
   const requestId=++artworkRequestId;
 
-  clearTimeout(fastCastArtworkTimer);
   setArtworkWaitingState();
 
-  /* If Centova's image has already switched, use it immediately. */
-  if(await applyFastCastArtwork(requestId,false))return;
-
   /*
-    Otherwise give the FastCast/Centova streaminfo widget time to update its
-    trackimageurl after artist/title. If the URL stays identical, accept it
-    after the grace period: consecutive songs may share the same artwork.
+    The uploader stores the embedded artwork under a deterministic path made
+    from the same artist/title tags FastCast broadcasts. This avoids Centova's
+    resized thumbnails entirely and does not require a browser-readable JSON
+    manifest or any third-party artwork lookup.
   */
-  fastCastArtworkTimer=setTimeout(()=>{
-    applyFastCastArtwork(requestId,true);
-  },1400);
-}
+  const url=r2ArtworkURL(cleanArtist,cleanTitle);
 
-if(fastCoverSource){
-  const fastCoverObserver=new MutationObserver(()=>{
-    clearTimeout(fastCastArtworkTimer);
-    applyFastCastArtwork(artworkRequestId,false).then(applied=>{
-      if(applied)return;
-
-      fastCastArtworkTimer=setTimeout(()=>{
-        applyFastCastArtwork(artworkRequestId,true);
-      },500);
-    });
-  });
-
-  fastCoverObserver.observe(fastCoverSource,{
-    attributes:true,
-    attributeFilter:["src"]
-  });
+  try{
+    await showCover(url,"r2",requestId);
+  }catch(error){
+    /* No blurry or unrelated fallback: keep the neutral missing-art state. */
+  }
 }
 
 /* ---------- CURRENT TRACK + TRANSITIONS ---------- */

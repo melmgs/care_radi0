@@ -292,14 +292,99 @@ function scheduledProgramSlots(){
   });
 }
 
+const WEEKDAY_INDEX={
+  sunday:0,
+  monday:1,
+  tuesday:2,
+  wednesday:3,
+  thursday:4,
+  friday:5,
+  saturday:6
+};
+
+function parisNowParts(){
+  try{
+    const parts=new Intl.DateTimeFormat("en-US",{
+      timeZone:"Europe/Paris",
+      weekday:"long",
+      hour:"2-digit",
+      minute:"2-digit",
+      hourCycle:"h23"
+    }).formatToParts(new Date());
+
+    const weekday=String(parts.find(part=>part.type==="weekday")?.value||"").toLowerCase();
+    const hour=Number(parts.find(part=>part.type==="hour")?.value||0);
+    const minute=Number(parts.find(part=>part.type==="minute")?.value||0);
+
+    return{
+      weekday:WEEKDAY_INDEX[weekday],
+      minutes:(hour*60)+minute
+    };
+  }catch(error){
+    const now=new Date();
+    return{
+      weekday:now.getDay(),
+      minutes:(now.getHours()*60)+now.getMinutes()
+    };
+  }
+}
+
+function clockMinutes(value){
+  const parsed=parseProgrammeTime(value);
+  return parsed?((parsed.hour*60)+parsed.minute):null;
+}
+
+function recurringScheduleIsActive(schedule,nowParts){
+  if(!schedule||typeof schedule!=="object")return false;
+
+  const dayKey=String(schedule.day||"").trim().toLowerCase();
+  const scheduleDay=WEEKDAY_INDEX[dayKey];
+  const start=clockMinutes(schedule.start);
+  const end=clockMinutes(schedule.end);
+
+  if(scheduleDay===undefined||start===null||end===null||start===end)return false;
+
+  const currentDay=nowParts.weekday;
+  const currentMinutes=nowParts.minutes;
+
+  // Normal same-day slot, e.g. Saturday 10:00 -> 13:00.
+  if(end>start){
+    return currentDay===scheduleDay&&currentMinutes>=start&&currentMinutes<end;
+  }
+
+  // Overnight slot, e.g. Friday 22:00 -> 02:00 Saturday.
+  const nextDay=(scheduleDay+1)%7;
+  return(
+    (currentDay===scheduleDay&&currentMinutes>=start)||
+    (currentDay===nextDay&&currentMinutes<end)
+  );
+}
+
+function getRecurringProgram(){
+  const nowParts=parisNowParts();
+
+  return activePrograms().find(program=>{
+    const schedules=Array.isArray(program.schedule)?program.schedule:[];
+    return schedules.some(schedule=>recurringScheduleIsActive(schedule,nowParts));
+  })||null;
+}
+
 function getCurrentProgram(){
   const fallback=getDefaultProgram();
-  const now=parisNowStamp();
-  const current=scheduledProgramSlots()
-    .filter(slot=>now>=slot.start&&now<slot.end)
-    .pop();
 
-  return current?.program||fallback||null;
+  // Dated agenda entries remain useful for one-off specials and take priority.
+  const now=parisNowStamp();
+  const datedProgram=scheduledProgramSlots()
+    .filter(slot=>now>=slot.start&&now<slot.end)
+    .pop()?.program;
+
+  if(datedProgram)return datedProgram;
+
+  // Recurring weekly schedules live directly in programs.json.
+  const recurringProgram=getRecurringProgram();
+  if(recurringProgram)return recurringProgram;
+
+  return fallback||null;
 }
 
 function currentProgramLabel(program){

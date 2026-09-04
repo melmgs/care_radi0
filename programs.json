@@ -20,6 +20,13 @@
       "last_updated": "",
       "active": true,
       "featured": false,
+      "schedule": [
+        {
+          "day": "saturday",
+          "start": "10:00",
+          "end": "13:00"
+        }
+      ],
       "tracks": []
     },
     {
